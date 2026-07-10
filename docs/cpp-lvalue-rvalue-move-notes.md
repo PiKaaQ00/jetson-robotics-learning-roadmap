@@ -359,7 +359,192 @@ const Data &
 允许移动，而不是保证移动。
 ```
 
-## 9. noexcept 的意义
+## 9. 函数模板中的 T&&：转发引用
+
+普通函数中的右值引用参数只能绑定右值：
+
+```cpp
+void doStuff(Buffer && buffer);
+
+Buffer a("camera");
+
+doStuff(Buffer("lidar")); // 可以，临时对象是右值
+// doStuff(a);            // 错误，a 是左值
+```
+
+但函数模板中的 `T&&` 比较特殊：
+
+```cpp
+template <typename T>
+void foo(T && value)
+{
+}
+```
+
+当 `T` 需要由实参推导出来，并且参数形式正好是 `T&&` 时，它不是普通右值引用，而是**转发引用**，也常被称为**万能引用**。
+
+它的规则是：
+
+```text
+传入左值：T 被推导为左值引用。
+传入右值：T 被推导为普通类型。
+```
+
+示例：
+
+```cpp
+#include <string>
+
+template <typename T>
+void foo(T && value)
+{
+}
+
+int main()
+{
+    int i = 42;
+
+    foo(i);             // i 是左值，T 推导为 int&
+    foo(42);            // 42 是右值，T 推导为 int
+    foo(std::string{}); // 临时 string 是右值，T 推导为 std::string
+}
+```
+
+当传入左值时：
+
+```cpp
+foo(i);
+```
+
+模板推导结果是：
+
+```cpp
+T = int&
+```
+
+参数类型：
+
+```cpp
+T&&
+```
+
+会变成：
+
+```cpp
+int& &&
+```
+
+这时会发生引用折叠。
+
+引用折叠规则：
+
+```text
+&  + &  -> &
+&  + && -> &
+&& + &  -> &
+&& + && -> &&
+```
+
+只要出现一个左值引用 `&`，结果就是左值引用。
+
+所以：
+
+```cpp
+int& &&
+```
+
+最终折叠为：
+
+```cpp
+int&
+```
+
+因此 `foo(i)` 最终相当于：
+
+```cpp
+void foo(int & value);
+```
+
+这就是为什么模板中的 `T&&` 可以接收左值。
+
+## 10. std::forward：保留原来的左值/右值属性
+
+即使参数类型是右值引用，只要参数有名字，在函数内部它就是左值表达式。
+
+```cpp
+template <typename T>
+void foo(T && value)
+{
+    // value 有名字，所以 value 在这里是左值
+}
+```
+
+如果要把参数继续传给别的函数，并保留它原来的左值或右值属性，应使用：
+
+```cpp
+std::forward<T>(value)
+```
+
+完整示例：
+
+```cpp
+#include <iostream>
+#include <utility>
+
+void target(int &)
+{
+    std::cout << "target(int&): left value\n";
+}
+
+void target(int &&)
+{
+    std::cout << "target(int&&): right value\n";
+}
+
+template <typename T>
+void wrapper(T && value)
+{
+    target(std::forward<T>(value));
+}
+
+int main()
+{
+    int x = 10;
+
+    wrapper(x);  // x 是左值，调用 target(int&)
+    wrapper(20); // 20 是右值，调用 target(int&&)
+}
+```
+
+如果在 `wrapper()` 中直接写：
+
+```cpp
+target(value);
+```
+
+那么两次都会调用：
+
+```cpp
+target(int&)
+```
+
+因为 `value` 有名字，所以在函数体内部是左值。
+
+`std::move()` 和 `std::forward()` 的区别：
+
+```text
+std::move(x)：无条件把 x 转成右值。
+std::forward<T>(x)：根据 T 的推导结果决定保留左值还是右值。
+```
+
+所以：
+
+```text
+移动语义中，明确要转移资源时用 std::move。
+模板转发参数时，想保留原始值类别时用 std::forward。
+```
+
+## 11. noexcept 的意义
 
 移动构造和移动赋值通常建议加 `noexcept`：
 
@@ -372,7 +557,7 @@ Buffer & operator=(Buffer && other) noexcept;
 
 例如 `std::vector<Buffer>` 扩容时，如果移动构造不是 `noexcept`，为了异常安全，它可能选择复制而不是移动。
 
-## 10. 和机器人项目的关系
+## 12. 和机器人项目的关系
 
 机器人 C++ 项目中，经常会有大对象：
 
@@ -420,18 +605,19 @@ int main()
 }
 ```
 
-## 11. 记忆总结
+## 13. 记忆总结
 
 ```text
 左值：有名字，能继续使用。
 右值：临时对象，用完就销毁。
 T&：左值引用。
 T&&：右值引用。
+模板参数 T&&：在类型推导场景下是转发引用。
 复制构造：用左值创建新对象，深拷贝。
 移动构造：用右值创建新对象，接管资源。
 复制赋值：已有对象接收左值，深拷贝。
 移动赋值：已有对象接收右值，释放旧资源并接管新资源。
 std::move：把左值转换成右值引用，允许移动。
+std::forward<T>：保留模板参数原来的左值/右值属性。
 移动后对象：仍然有效，但不要依赖原来的内容。
 ```
-
