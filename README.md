@@ -42,6 +42,7 @@
 - [C++ 左值、右值与移动语义复习笔记](docs/cpp-lvalue-rvalue-move-notes.md)
 - [C++ 面向对象基础复习笔记](docs/cpp-oop-notes.md)
 - [线程学习：第一部分](docs/线程学习.md)
+- [线程学习：第二部分](docs/线程学习-第二部分.md)
 
 ## 学习周期预估
 
