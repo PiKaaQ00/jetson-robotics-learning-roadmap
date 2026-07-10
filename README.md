@@ -37,6 +37,10 @@
 1小时：学习总结 / GitHub提交 / README编写
 ```
 
+## C++ Notes
+
+- [C++ 左值、右值与移动语义复习笔记](docs/cpp-lvalue-rvalue-move-notes.md)
+
 ## 学习周期预估
 
 ```text
